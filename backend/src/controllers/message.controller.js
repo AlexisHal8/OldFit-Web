@@ -1,106 +1,83 @@
-import cloudinary from "../lib/cloudinary.js";
-import { getReceiverSocketId, io } from "../lib/socket.js";
 import { pool } from "../lib/db.js";
+import { getReceiverSocketId, io } from "../lib/socket.js";
+import cloudinary from "../lib/cloudinary.js"
 
-export const getAllContacts = async (req, res) => {
+// Obtener los contactos disponibles (Geriatras ven Clientes y viceversa)
+export const getContacts = async (req, res) => {
+  const userId = req.user.id;
+  const userRole = req.user.rol;
+
   try {
-    const loggedInUserId = req.user.id;
-    
-    const query = `
-      SELECT id as "_id", full_name as "fullName", email, profile_pic as "profilePic", role 
-      FROM users 
-      WHERE id != $1
-    `;
-    const users = await pool.query(query, [loggedInUserId]);
-
-    res.status(200).json(users.rows);
-  } catch (error) {
-    console.log("Error in getAllContacts:", error);
-    res.status(500).json({ message: "Server error" });
-  }
-};
-
-export const getMessagesByUserId = async (req, res) => {
-  try {
-    const myId = req.user.id;
-    const { id: userToChatId } = req.params;
-
-    const query = `
-      SELECT id as "_id", sender_id as "senderId", receiver_id as "receiverId", text, image_url as image, created_at as "createdAt"
-      FROM messages
-      WHERE (sender_id = $1 AND receiver_id = $2) 
-         OR (sender_id = $2 AND receiver_id = $1)
-      ORDER BY created_at ASC;
-    `;
-    
-    const messages = await pool.query(query, [myId, userToChatId]);
-
-    res.status(200).json(messages.rows);
-  } catch (error) {
-    console.log("Error in getMessages controller: ", error.message);
-    res.status(500).json({ error: "Internal server error" });
-  }
-};
-
-export const sendMessage = async (req, res) => {
-  try {
-    const { text, image } = req.body;
-    const { id: receiverId } = req.params;
-    const senderId = req.user.id;
-
-    if (!text && !image) return res.status(400).json({ message: "Text or image is required." });
-    if (senderId === receiverId) return res.status(400).json({ message: "Cannot send messages to yourself." });
-
-    // Verificar si el receptor existe
-    const receiverCheck = await pool.query("SELECT id FROM users WHERE id = $1", [receiverId]);
-    if (receiverCheck.rows.length === 0) return res.status(404).json({ message: "Receiver not found." });
-
-    let imageUrl = null;
-    if (image) {
-      const uploadResponse = await cloudinary.uploader.upload(image);
-      imageUrl = uploadResponse.secure_url;
+    let query;
+    if (userRole === "geriatra" || userRole === "administrador") {
+      // El geriatra ve a sus clientes asignados o con los que tiene conversación
+      query = `SELECT id_cliente AS id, CONCAT(nombre, ' ', apellidop) AS fullName, rol, foto_perfil FROM clientes`;
+    } else {
+      // El cliente ve a los geriatras
+      query = `SELECT id_geriatra AS id, CONCAT(nombre, ' ', apellidop) AS fullName, rol, foto_perfil FROM geriatras`;
     }
 
-    const insertQuery = `
-      INSERT INTO messages (sender_id, receiver_id, text, image_url)
-      VALUES ($1, $2, $3, $4)
-      RETURNING id as "_id", sender_id as "senderId", receiver_id as "receiverId", text, image_url as image, created_at as "createdAt";
-    `;
-    
-    const newMessageResult = await pool.query(insertQuery, [senderId, receiverId, text, imageUrl]);
-    const newMessage = newMessageResult.rows[0];
+    const { rows } = await pool.query(query);
+    res.status(200).json(rows);
+  } catch (error) {
+    res.status(500).json({ message: "Error al obtener contactos" });
+  }
+};
 
-    const receiverSocketId = getReceiverSocketId(receiverId);
+// Obtener mensajes de una conversación específica
+export const getMessages = async (req, res) => {
+  const { id_conversacion } = req.params;
+
+  try {
+    const query = `
+      SELECT id_mensaje, contenido_texto, fecha_envio, id_remitente, tipo_remitente 
+      FROM mensajes 
+      WHERE id_conversacion = $1 
+      ORDER BY fecha_envio ASC
+    `;
+    const { rows } = await pool.query(query, [id_conversacion]);
+    
+    // Postgres devuelve el JSONB como objeto automáticamente
+    res.status(200).json(rows);
+  } catch (error) {
+    res.status(500).json({ message: "Error al recuperar mensajes" });
+  }
+};
+
+// Enviar un mensaje (Guardando en JSONB como pide tu esquema)
+export const sendMessage = async (req, res) => {
+  const { id_conversacion, contenido_texto } = req.body;
+  const senderId = req.user.id; // Viene del protectRoute
+  const senderRole = req.user.rol;
+
+  try {
+    // Determinar tipo_remitente según el ENUM de tu DB
+    const tipoRemitente = (senderRole === 'geriatra' || senderRole === 'administrador') 
+                          ? 'geriatra' : 'cliente';
+
+    // 2. Insertar mensaje (contenido es JSONB)
+    const query = `
+      INSERT INTO mensajes (id_conversacion, id_remitente, tipo_remitente, contenido_texto)
+      VALUES ($1, $2, $3, $4)
+      RETURNING *;
+    `;
+    const { rows } = await pool.query(query, [id_conversacion, senderId, tipoRemitente, contenido_texto]);
+    const newMessage = rows[0];
+
+    // 3. Lógica de Socket.io para tiempo real
+    const convData = await pool.query("SELECT id_cliente, id_geriatra FROM conversacion WHERE id_conversacion = $1", [id_conversacion]);
+    const receiverId = tipoRemitente === "geriatra" 
+  ? convData.rows[0].id_cliente 
+  : convData.rows[0].id_geriatra;
+
+    const receiverRole = tipoRemitente === "geriatra" ? "cliente" : "geriatra";
+    const receiverSocketId = getReceiverSocketId(receiverId.toString(), receiverRole);
     if (receiverSocketId) {
       io.to(receiverSocketId).emit("newMessage", newMessage);
     }
 
     res.status(201).json(newMessage);
   } catch (error) {
-    console.log("Error in sendMessage controller: ", error.message);
-    res.status(500).json({ error: "Internal server error" });
-  }
-};
-
-export const getChatPartners = async (req, res) => {
-  try {
-    const loggedInUserId = req.user.id;
-
-    // Con SQL, en lugar de mapear arreglos en JavaScript, usamos un JOIN y DISTINCT
-    // Esto busca a los usuarios que hayan enviado o recibido un mensaje tuyo.
-    const query = `
-      SELECT DISTINCT u.id as "_id", u.full_name as "fullName", u.email, u.profile_pic as "profilePic", u.role
-      FROM users u
-      JOIN messages m ON (u.id = m.sender_id OR u.id = m.receiver_id)
-      WHERE (m.sender_id = $1 OR m.receiver_id = $1) 
-        AND u.id != $1;
-    `;
-    
-    const chatPartners = await pool.query(query, [loggedInUserId]);
-
-    res.status(200).json(chatPartners.rows);
-  } catch (error) {
-    console.error("Error in getChatPartners: ", error.message);
-    res.status(500).json({ error: "Internal server error" });
+    res.status(500).json({ message: "Error al enviar mensaje" });
   }
 };

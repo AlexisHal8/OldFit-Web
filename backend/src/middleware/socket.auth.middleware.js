@@ -16,14 +16,21 @@ export const socketAuthMiddleware = async (socket, next) => {
 
     const decoded = jwt.verify(token, ENV.JWT_SECRET);
     if (!decoded) {
-      console.log("Conexión de socket rechazada: Token invalido");
-      return next(new Error("Sin autorización - Token invalido"));
+      console.log("Conexión de socket rechazada: Token inválido");
+      return next(new Error("Sin autorización - Token inválido"));
     }
 
-    const userResult = await pool.query(
-      "SELECT id, email, full_name, profile_pic, role FROM users WHERE id = $1", 
-      [decoded.userId]
-    );
+    let query = "";
+    
+    if (decoded.userRole === "geriatra" || decoded.userRole === "administrador") {
+      query = `SELECT id_geriatra AS id, correo AS email, nombre, apellidop, CONCAT(nombre, ' ', apellidop) AS full_name, foto_perfil AS profile_pic, rol 
+               FROM geriatras WHERE id_geriatra = $1`;
+    } else {
+      query = `SELECT id_cliente AS id, correo AS email, nombre, apellidop, CONCAT(nombre, ' ', apellidop) AS full_name, foto_perfil AS profile_pic, rol 
+               FROM clientes WHERE id_cliente = $1`;
+    }
+
+    const userResult = await pool.query(query, [decoded.userId]);
 
     if (userResult.rows.length === 0) {
       console.log("Conexión con el socket rechazada: Usuario no encontrado");
@@ -31,9 +38,9 @@ export const socketAuthMiddleware = async (socket, next) => {
     }
 
     socket.user = userResult.rows[0];
-    socket.userId = userResult.rows[0].id.toString(); // Cambiado de _id a id
+    socket.userId = userResult.rows[0].id.toString(); 
 
-    console.log(`Socket autenticado para el usuario: ${socket.user.full_name} (${socket.user.id})`);
+    console.log(`Socket autenticado para el usuario: ${socket.user.full_name} (ID: ${socket.userId}, Rol: ${socket.user.rol})`);
 
     next();
   } catch (error) {
