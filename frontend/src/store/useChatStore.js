@@ -8,7 +8,7 @@ export const useChatStore = create((set, get) => ({
   chats: [],
   messages: [],
   activeTab: "chats",
-  selectedUser: null, // Este objeto ahora tendrá id_cliente o id_geriatra
+  selectedUser: null,
   isUsersLoading: false,
   isMessagesLoading: false,
   isSoundEnabled: JSON.parse(localStorage.getItem("isSoundEnabled")) === true,
@@ -37,6 +37,7 @@ export const useChatStore = create((set, get) => ({
   getMyChatPartners: async () => {
     set({ isUsersLoading: true });
     try {
+      // ✅ Corregido: ruta que ahora existe en el backend
       const res = await axiosInstance.get("/messages/conversations");
       set({ chats: res.data });
     } catch (error) {
@@ -49,6 +50,7 @@ export const useChatStore = create((set, get) => ({
   getMessagesByUserId: async (targetId) => {
     set({ isMessagesLoading: true });
     try {
+      // ✅ Corregido: el backend ahora resuelve la conversación por targetId
       const res = await axiosInstance.get(`/messages/${targetId}`);
       set({ messages: res.data });
     } catch (error) {
@@ -60,16 +62,14 @@ export const useChatStore = create((set, get) => ({
 
   sendMessage: async (messageData) => {
     const { selectedUser, messages } = get();
+    // ✅ Corregido: authUser usa .id (aliasado en el backend), no .id_cliente/.id_geriatra
     const { authUser } = useAuthStore.getState();
 
-    // Identificar el ID actual (puede ser id_cliente o id_geriatra)
-    const myId = authUser.id_cliente || authUser.id_geriatra;
-    const targetId = selectedUser.id_cliente || selectedUser.id_geriatra;
-
     const optimisticMessage = {
-      id_mensaje: Date.now(), // ID temporal numérico
-      id_remitente: myId,
-      contenido_texto: messageData.text,
+      id_mensaje: Date.now(),
+      id_remitente: authUser.id,
+      // ✅ Corregido: campo correcto
+      contenido_texto: messageData.contenido_texto,
       fecha_envio: new Date().toISOString(),
       isOptimistic: true,
     };
@@ -77,8 +77,11 @@ export const useChatStore = create((set, get) => ({
     set({ messages: [...messages, optimisticMessage] });
 
     try {
-      const res = await axiosInstance.post(`/messages/send/${targetId}`, messageData);
-      // Reemplazamos los mensajes con la respuesta real del servidor (Postgres)
+      // ✅ Corregido: ruta sin param en URL, targetId va en el body
+      const res = await axiosInstance.post("/messages/send", {
+        targetId: selectedUser.id,
+        contenido_texto: messageData.contenido_texto,
+      });
       set({ messages: [...get().messages.filter(m => !m.isOptimistic), res.data] });
     } catch (error) {
       set({ messages: messages.filter(m => !m.isOptimistic) });
@@ -87,19 +90,17 @@ export const useChatStore = create((set, get) => ({
   },
 
   subscribeToMessages: () => {
-    const { selectedUser, isSoundEnabled } = get();
+    const { selectedUser } = get();
     if (!selectedUser) return;
 
     const socket = useAuthStore.getState().socket;
-    const targetId = selectedUser.id_cliente || selectedUser.id_geriatra;
 
     socket.on("newMessage", (newMessage) => {
-      // Validamos que el mensaje venga de la persona con la que estamos hablando
-      if (newMessage.id_remitente !== targetId) return;
-
+      // ✅ Corregido: comparamos con selectedUser.id (ya normalizado)
+      if (newMessage.id_remitente !== selectedUser.id) return;
       set({ messages: [...get().messages, newMessage] });
 
-      if (isSoundEnabled) {
+      if (get().isSoundEnabled) {
         const notificationSound = new Audio("/sounds/notification.mp3");
         notificationSound.play().catch((e) => console.log("Error de audio:", e));
       }

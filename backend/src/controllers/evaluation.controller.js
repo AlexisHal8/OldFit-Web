@@ -5,7 +5,7 @@ import { buildEvaluationPDF } from "../lib/pdf.generator.js";
 const uploadBufferToCloudinary = (buffer, folderName) => {
   return new Promise((resolve, reject) => {
     const uploadStream = cloudinary.uploader.upload_stream(
-      { folder: folderName, resource_type: "document" },
+      { folder: folderName, resource_type: "raw" },
       (error, result) => {
         if (error) reject(error);
         else resolve(result);
@@ -17,16 +17,13 @@ const uploadBufferToCloudinary = (buffer, folderName) => {
 
 export const createEvaluation = async (req, res) => {
   const { patientId, type, results } = req.body;
-  const evaluatorId = req.user.id; // Viene del token JWT (debería ser el geriatra)
+  const evaluatorId = req.user.id;
 
   try {
-    // 1. Obtener nombre del paciente (tabla clientes)
     const patientResult = await pool.query(
       "SELECT CONCAT(nombre, ' ', apellidop) AS full_name FROM clientes WHERE id_cliente = $1",
       [patientId]
     );
-    
-    // 2. Obtener nombre del evaluador (tabla geriatras)
     const evaluatorResult = await pool.query(
       "SELECT CONCAT(nombre, ' ', apellidop) AS full_name FROM geriatras WHERE id_geriatra = $1",
       [evaluatorId]
@@ -38,30 +35,53 @@ export const createEvaluation = async (req, res) => {
     const patientName = patientResult.rows[0].full_name;
     const evaluatorName = evaluatorResult.rows[0].full_name;
 
-    // 3. Generar el PDF en memoria
-    const pdfBuffer = await buildEvaluationPDF(patientName, evaluatorName, type, results);
-
-    // 4. Subir el PDF a Cloudinary
-    const cloudinaryResponse = await uploadBufferToCloudinary(pdfBuffer, "geriatric_reports");
-
-    // 5. Guardar en PostgreSQL (usando la nueva tabla evaluaciones_clinicas)
-    const insertQuery = `
-      INSERT INTO evaluaciones_clinicas (id_cliente, id_geriatra, tipo, resultados, url_pdf_reporte)
-      VALUES ($1, $2, $3, $4, $5)
-      RETURNING *;
-    `;
-    
-    const newEvalResult = await pool.query(insertQuery, [
-      patientId, 
-      evaluatorId, 
-      type, 
-      JSON.stringify(results), // Aseguramos formato JSONB
-      cloudinaryResponse.secure_url
+    // Obtener historial completo para el PDF
+    const [cognitivoResult, fisicoResult, medicamentosResult] = await Promise.all([
+      pool.query(`
+        SELECT j.nombre, j.area_cognitiva, rm.puntaje, rm.aciertos, 
+               rm.errores, rm.tiempo, rm.detalles, sj.fecha_hora_fin AS fecha
+        FROM sesiones_juego sj
+        JOIN juegos j ON sj.id_juego = j.id_juego
+        JOIN resultados_metricas rm ON rm.id_sesion = sj.id_sesion
+        WHERE sj.id_cliente = $1
+        ORDER BY sj.fecha_hora_fin DESC LIMIT 10
+      `, [patientId]),
+      pool.query(`
+        SELECT nombre_ejercicio, metrica, observaciones, fecha
+        FROM evaluaciones_fisicas
+        WHERE id_cliente = $1
+        ORDER BY fecha DESC LIMIT 10
+      `, [patientId]),
+      pool.query(`
+        SELECT nombre_medicamento, dosis, frecuencia_horas, duracion_dias,
+               fecha_inicio, fecha_fin, indicaciones, estatus
+        FROM medicamentos
+        WHERE id_paciente = $1 AND estatus = 'activo'
+        ORDER BY fecha_inicio DESC
+      `, [patientId])
     ]);
 
+    const pdfBuffer = await buildEvaluationPDF(
+      patientName,
+      evaluatorName,
+      type,
+      results,
+      cognitivoResult.rows,
+      fisicoResult.rows,
+      medicamentosResult.rows
+    );
+
+    const cloudinaryResponse = await uploadBufferToCloudinary(pdfBuffer, "geriatric_reports");
+
+    // Guardar registro en evaluaciones_fisicas (tabla real del schema)
+    // Si quieres un registro del reporte generado, puedes usar una tabla aparte
+    // Por ahora devolvemos la URL del PDF directamente
     res.status(201).json({
       message: "Evaluación guardada y PDF generado exitosamente",
-      evaluation: newEvalResult.rows[0]
+      pdf_url: cloudinaryResponse.secure_url,
+      paciente: patientName,
+      evaluador: evaluatorName,
+      tipo: type,
     });
 
   } catch (error) {
