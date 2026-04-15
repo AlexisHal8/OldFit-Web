@@ -8,14 +8,15 @@ export const useChatStore = create((set, get) => ({
   chats: [],
   messages: [],
   activeTab: "chats",
-  selectedUser: null,
+  selectedUser: null, // Este objeto ahora tendrá id_cliente o id_geriatra
   isUsersLoading: false,
   isMessagesLoading: false,
   isSoundEnabled: JSON.parse(localStorage.getItem("isSoundEnabled")) === true,
 
   toggleSound: () => {
-    localStorage.setItem("isSoundEnabled", !get().isSoundEnabled);
-    set({ isSoundEnabled: !get().isSoundEnabled });
+    const nextState = !get().isSoundEnabled;
+    localStorage.setItem("isSoundEnabled", nextState);
+    set({ isSoundEnabled: nextState });
   },
 
   setActiveTab: (tab) => set({ activeTab: tab }),
@@ -27,30 +28,31 @@ export const useChatStore = create((set, get) => ({
       const res = await axiosInstance.get("/messages/contacts");
       set({ allContacts: res.data });
     } catch (error) {
-      toast.error(error.response.data.message);
-    } finally {
-      set({ isUsersLoading: false });
-    }
-  },
-  getMyChatPartners: async () => {
-    set({ isUsersLoading: true });
-    try {
-      const res = await axiosInstance.get("/messages/chats");
-      set({ chats: res.data });
-    } catch (error) {
-      toast.error(error.response.data.message);
+      toast.error("Error al cargar contactos");
     } finally {
       set({ isUsersLoading: false });
     }
   },
 
-  getMessagesByUserId: async (userId) => {
+  getMyChatPartners: async () => {
+    set({ isUsersLoading: true });
+    try {
+      const res = await axiosInstance.get("/messages/conversations");
+      set({ chats: res.data });
+    } catch (error) {
+      toast.error("Error al cargar chats activos");
+    } finally {
+      set({ isUsersLoading: false });
+    }
+  },
+
+  getMessagesByUserId: async (targetId) => {
     set({ isMessagesLoading: true });
     try {
-      const res = await axiosInstance.get(`/messages/${userId}`);
+      const res = await axiosInstance.get(`/messages/${targetId}`);
       set({ messages: res.data });
     } catch (error) {
-      toast.error(error.response?.data?.message || "Something went wrong");
+      toast.error("No se pudieron cargar los mensajes");
     } finally {
       set({ isMessagesLoading: false });
     }
@@ -60,27 +62,27 @@ export const useChatStore = create((set, get) => ({
     const { selectedUser, messages } = get();
     const { authUser } = useAuthStore.getState();
 
-    const tempId = `temp-${Date.now()}`;
+    // Identificar el ID actual (puede ser id_cliente o id_geriatra)
+    const myId = authUser.id_cliente || authUser.id_geriatra;
+    const targetId = selectedUser.id_cliente || selectedUser.id_geriatra;
 
     const optimisticMessage = {
-      _id: tempId,
-      senderId: authUser._id,
-      receiverId: selectedUser._id,
-      text: messageData.text,
-      image: messageData.image,
-      createdAt: new Date().toISOString(),
-      isOptimistic: true, // flag to identify optimistic messages (optional)
+      id_mensaje: Date.now(), // ID temporal numérico
+      id_remitente: myId,
+      contenido_texto: messageData.text,
+      fecha_envio: new Date().toISOString(),
+      isOptimistic: true,
     };
-    // immidetaly update the ui by adding the message
+
     set({ messages: [...messages, optimisticMessage] });
 
     try {
-      const res = await axiosInstance.post(`/messages/send/${selectedUser._id}`, messageData);
-      set({ messages: messages.concat(res.data) });
+      const res = await axiosInstance.post(`/messages/send/${targetId}`, messageData);
+      // Reemplazamos los mensajes con la respuesta real del servidor (Postgres)
+      set({ messages: [...get().messages.filter(m => !m.isOptimistic), res.data] });
     } catch (error) {
-      // remove optimistic message on failure
-      set({ messages: messages });
-      toast.error(error.response?.data?.message || "Something went wrong");
+      set({ messages: messages.filter(m => !m.isOptimistic) });
+      toast.error("Error al enviar mensaje");
     }
   },
 
@@ -89,25 +91,23 @@ export const useChatStore = create((set, get) => ({
     if (!selectedUser) return;
 
     const socket = useAuthStore.getState().socket;
+    const targetId = selectedUser.id_cliente || selectedUser.id_geriatra;
 
     socket.on("newMessage", (newMessage) => {
-      const isMessageSentFromSelectedUser = newMessage.senderId === selectedUser._id;
-      if (!isMessageSentFromSelectedUser) return;
+      // Validamos que el mensaje venga de la persona con la que estamos hablando
+      if (newMessage.id_remitente !== targetId) return;
 
-      const currentMessages = get().messages;
-      set({ messages: [...currentMessages, newMessage] });
+      set({ messages: [...get().messages, newMessage] });
 
       if (isSoundEnabled) {
         const notificationSound = new Audio("/sounds/notification.mp3");
-
-        notificationSound.currentTime = 0; // reset to start
-        notificationSound.play().catch((e) => console.log("Audio play failed:", e));
+        notificationSound.play().catch((e) => console.log("Error de audio:", e));
       }
     });
   },
 
   unsubscribeFromMessages: () => {
     const socket = useAuthStore.getState().socket;
-    socket.off("newMessage");
+    if (socket) socket.off("newMessage");
   },
 }));
