@@ -74,14 +74,22 @@ export const useAuthStore = create((set, get) => ({
   },
 
   updateProfile: async (data) => {
-    try {
-      const res = await axiosInstance.put("/auth/update-profile", data);
-      set({ authUser: res.data });
-      toast.success("Perfil actualizado");
-    } catch (error) {
-      toast.error(error.response?.data?.message || "Error al actualizar");
-    }
-  },
+  try {
+    // 'data' debe ser { profilePic: "data:image/..." }
+    const res = await axiosInstance.put("/auth/update-profile", data);
+    
+    // 1. Actualizamos el estado de Zustand
+    set({ authUser: res.data });
+    
+    // 2. CRÍTICO: Actualizamos el localStorage para que persista al recargar
+    localStorage.setItem("usuario", JSON.stringify(res.data));
+    
+    toast.success("Perfil actualizado");
+  } catch (error) {
+    console.log("Error en updateProfile store:", error);
+    toast.error(error.response?.data?.message || "Error al actualizar");
+  }
+},
 
   connectSocket: () => {
     const { authUser } = get();

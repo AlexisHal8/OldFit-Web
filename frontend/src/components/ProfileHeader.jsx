@@ -12,19 +12,21 @@ function ProfileHeader() {
 
   const fileInputRef = useRef(null);
 
-  const handleImageUpload = (e) => {
-    const file = e.target.files[0];
-    if (!file) return;
+  const handleImageUpload = async (e) => {
+  const file = e.target.files[0];
+  if (!file) return;
 
-    const reader = new FileReader();
-    reader.readAsDataURL(file);
+  const reader = new FileReader();
+  reader.readAsDataURL(file);
 
-    reader.onloadend = async () => {
-      const base64Image = reader.result;
-      setSelectedImg(base64Image);
-      await updateProfile({ foto_perfil: base64Image });
-    };
+  reader.onload = async () => {
+    const base64Image = reader.result;
+    
+    // El 'data' que recibe updateProfile DEBE ser un objeto
+    // con la clave 'profilePic', que es la que busca tu controlador
+    await updateProfile({ profilePic: base64Image }); 
   };
+};
 
   return (
     <div className="p-6 border-b border-slate-700/50">
