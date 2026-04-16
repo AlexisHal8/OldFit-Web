@@ -4,13 +4,17 @@ import { AnimatePresence } from 'framer-motion';
 import Login from './pages/Login';
 import AdminDashboard from './pages/AdminDashboard';
 import GeriatraDashboard from './pages/GeriatraDashboard';
+import DashboardReportes from "./pages/DashboardReportes";
 import PageTransition from './pages/PageTransition';
 import VideoLoader from './pages/VideoLoader';
-
+import { useAuthStore } from "./store/useAuthStore";
 // ------------------------------------------------------------------
 // COMPONENTE DE SEGURIDAD: Valida el token y el rol antes de renderizar
 // ------------------------------------------------------------------
 const getUsuarioSeguro = () => {
+
+  
+
   const usuario = localStorage.getItem('usuario');
   // Verifica que exista y que no sea la palabra "undefined"
   if (usuario && usuario !== "undefined") {
@@ -38,6 +42,7 @@ const ProtectedRoute = ({ children, allowedRole }) => {
 function AppRoutes() {
   // 3. Creamos un estado maestro para controlar el video
   const [isAppLoading, setIsAppLoading] = useState(true);
+  const { authUser } = useAuthStore();
 
   // 4. Simulamos un tiempo de carga de 2.5 segundos (2500 ms)
   useEffect(() => {
@@ -86,6 +91,11 @@ function AppRoutes() {
             } />
 
             <Route path="*" element={<Navigate to="/login" replace />} />
+
+            <Route 
+        path="/reportes" 
+        element={authUser?.rol === 'geriatra' || authUser?.rol === 'administrador' ? <DashboardReportes /> : <Navigate to="/login" />} 
+      />
           </Routes>
         </Router>
       )}

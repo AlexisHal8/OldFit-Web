@@ -1,18 +1,19 @@
 import React, { useState, useEffect } from 'react';
 import GestionarRecetas from './GestionarRecetas';
 import GestionarCitas from './GestionarCitas'; 
+import DashboardReportes from "./DashboardReportes";
 import ChatPage from './ChatPage';
 import { useAuthStore } from '../store/useAuthStore';
 
 const GeriatraDashboard = ({ user, onLogout }) => {
-  // 2. Estado para controlar qué "pestaña" estamos viendo (por defecto 'resumen')
+  // Estado para controlar qué "pestaña" estamos viendo
   const [vistaActiva, setVistaActiva] = useState('resumen');
   
   const [resumen, setResumen] = useState({ citasProgramadas: 0, citasDetalle: [], mensajesSinLeer: 0 });
   const [loading, setLoading] = useState(true);
   const { checkAuth } = useAuthStore();
 
-  // Carga de datos para el Resumen (Se mantiene igual)
+  // Carga de datos para el Resumen
   useEffect(() => {
     checkAuth();
     const fetchResumen = async () => {
@@ -31,14 +32,15 @@ const GeriatraDashboard = ({ user, onLogout }) => {
     if (user?.id) fetchResumen();
   }, [user.id]);
 
-  // 3. Función clave: Renderiza el contenido dependiendo de la pestaña activa
+  // Función clave: Renderiza el contenido dependiendo de la pestaña activa
   const renderizarContenido = () => {
-    if (vistaActiva === 'recetas') {
-      // Le pasamos el 'user' para que el componente sepa qué médico está creando la receta
-      return <GestionarRecetas user={user} />; 
-    }
+    if (vistaActiva === 'recetas') return <GestionarRecetas user={user} />; 
     if (vistaActiva === 'citas') return <GestionarCitas user={user} />;
 
+    // 1. AÑADIMOS LA CONDICIÓN PARA LOS REPORTES
+    if (vistaActiva === 'reportes') {
+      return <DashboardReportes />;
+    }
 
     if (vistaActiva === 'chat') {
       return (
@@ -48,7 +50,7 @@ const GeriatraDashboard = ({ user, onLogout }) => {
       );
     }
 
-    // Si no es 'recetas', mostramos el 'resumen' original
+    // Si no es ninguna de las anteriores, mostramos el 'resumen' original
     return (
       <>
         <h2 className="text-3xl font-bold text-gray-800 mb-6">Resumen General</h2>
@@ -56,19 +58,19 @@ const GeriatraDashboard = ({ user, onLogout }) => {
         {/* Tarjetas Superiores */}
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6 mb-10">
           <div 
-  onClick={() => setVistaActiva('citas')} 
-  className="bg-blue-50 p-6 rounded-xl shadow-sm border border-blue-200 hover:shadow-md hover:bg-blue-100 transition cursor-pointer group"
->
-  <h3 className="text-lg font-bold text-blue-800 group-hover:text-blue-900">Gestionar Citas</h3>
-  <p className="text-sm text-blue-600 mt-1">Módulo GC6</p>
-  <div className="mt-4 text-3xl font-bold text-gray-800">
-    {loading ? '...' : resumen.citasProgramadas}
-  </div>
-  <p className="text-xs text-gray-400 mt-1">Citas programadas para hoy</p>
-</div>
+            onClick={() => setVistaActiva('citas')} 
+            className="bg-blue-50 p-6 rounded-xl shadow-sm border border-blue-200 hover:shadow-md hover:bg-blue-100 transition cursor-pointer group"
+          >
+            <h3 className="text-lg font-bold text-blue-800 group-hover:text-blue-900">Gestionar Citas</h3>
+            <p className="text-sm text-blue-600 mt-1">Módulo GC6</p>
+            <div className="mt-4 text-3xl font-bold text-gray-800">
+              {loading ? '...' : resumen.citasProgramadas}
+            </div>
+            <p className="text-xs text-gray-400 mt-1">Citas programadas para hoy</p>
+          </div>
 
           <div 
-            onClick={() => setVistaActiva('recetas')} // Clic en la tarjeta también cambia la pestaña
+            onClick={() => setVistaActiva('recetas')}
             className="bg-emerald-50 p-6 rounded-xl shadow-sm border border-emerald-200 hover:shadow-md hover:bg-emerald-100 transition cursor-pointer group"
           >
             <h3 className="text-lg font-bold text-emerald-800">Recetas Médicas</h3>
@@ -76,28 +78,32 @@ const GeriatraDashboard = ({ user, onLogout }) => {
             <div className="mt-4 text-sm font-medium text-emerald-900">Asignar o modificar medicamentos.</div>
           </div>
 
-          <div className="bg-white p-6 rounded-xl shadow-sm border border-gray-200 hover:shadow-md transition cursor-pointer group">
-            <h3 className="text-lg font-bold text-blue-700">Reportes</h3>
+          {/* 2. CONECTAMOS LA TARJETA DE REPORTES */}
+          <div 
+            onClick={() => setVistaActiva('reportes')}
+            className="bg-white p-6 rounded-xl shadow-sm border border-gray-200 hover:shadow-md transition cursor-pointer group"
+          >
+            <h3 className="text-lg font-bold text-blue-700 group-hover:text-blue-800">Reportes</h3>
             <p className="text-sm text-gray-500 mt-1">Módulo RW3</p>
             <div className="mt-4 text-sm font-medium text-gray-700">Ver evolución del paciente.</div>
           </div>
 
           <div 
-  onClick={() => setVistaActiva('chat')} // <--- 3. EL EVENTO CLIC
-  className="bg-white p-6 rounded-xl shadow-sm border border-gray-200 hover:shadow-md hover:bg-orange-50 transition cursor-pointer group"
->
-  <h3 className="text-lg font-bold text-orange-600 group-hover:text-orange-700">Chats</h3>
-  <p className="text-sm text-gray-500 mt-1">Módulo RW2</p>
-  <div className="mt-4 flex items-center gap-2">
-    <span className="flex h-3 w-3 relative">
-      <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-orange-400 opacity-75"></span>
-      <span className="relative inline-flex rounded-full h-3 w-3 bg-orange-500"></span>
-    </span>
-    <span className="text-sm font-bold text-gray-800">
-      {resumen.mensajesSinLeer} mensajes nuevos
-    </span>
-  </div>
-</div>
+            onClick={() => setVistaActiva('chat')}
+            className="bg-white p-6 rounded-xl shadow-sm border border-gray-200 hover:shadow-md hover:bg-orange-50 transition cursor-pointer group"
+          >
+            <h3 className="text-lg font-bold text-orange-600 group-hover:text-orange-700">Chats</h3>
+            <p className="text-sm text-gray-500 mt-1">Módulo RW2</p>
+            <div className="mt-4 flex items-center gap-2">
+              <span className="flex h-3 w-3 relative">
+                <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-orange-400 opacity-75"></span>
+                <span className="relative inline-flex rounded-full h-3 w-3 bg-orange-500"></span>
+              </span>
+              <span className="text-sm font-bold text-gray-800">
+                {resumen.mensajesSinLeer} mensajes nuevos
+              </span>
+            </div>
+          </div>
         </div>
 
         {/* Lista de Citas del Día */}
@@ -142,7 +148,7 @@ const GeriatraDashboard = ({ user, onLogout }) => {
         </div>
       </header>
 
-      {/* 4. Menú de Pestañas (Sub-navbar) */}
+      {/* Menú de Pestañas (Sub-navbar) */}
       <nav className="bg-white shadow-sm border-b border-gray-200 px-6 md:px-8">
         <div className="flex space-x-6 overflow-x-auto">
           <button
@@ -155,9 +161,18 @@ const GeriatraDashboard = ({ user, onLogout }) => {
           >
             Resumen General
           </button>
-         
-
-          {/* Aquí podremos agregar más botones para Citas, Reportes, Chats, etc. */}
+          
+          {/* 3. AGREGAMOS EL BOTÓN DE REPORTES AL MENÚ PARA NAVEGAR MÁS FÁCIL */}
+          <button
+            onClick={() => setVistaActiva('reportes')}
+            className={`py-4 border-b-2 font-bold text-sm transition-colors whitespace-nowrap ${
+              vistaActiva === 'reportes' 
+                ? 'border-blue-600 text-blue-700' 
+                : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'
+            }`}
+          >
+            Reportes Clínicos
+          </button>
         </div>
       </nav>
 
