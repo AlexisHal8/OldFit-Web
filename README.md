@@ -15,6 +15,6 @@ npm i axios
 npm install react-hot-toast lucide-react
 npm i zustand
 npm install socket.io-client
-
+npm i cors
 Como correrlo
 node src/server.js 
