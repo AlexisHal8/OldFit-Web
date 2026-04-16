@@ -1,144 +1,171 @@
-// message.controller.js
 import { pool } from "../lib/db.js";
 import { getReceiverSocketId, io } from "../lib/socket.js";
+// import cloudinary from "../lib/cloudinary.js" // Descomenta si usas imágenes después
 
+// 1. Obtener la lista de chats activos (La función que arregló el error 500)
+export const getConversations = async (req, res) => {
+  try {
+    const userId = req.user.id;
+    const rol = req.user.rol;
+    let query = "";
+
+    if (rol === "geriatra" || rol === "administrador") {
+      query = `
+        SELECT c.id_cliente AS id, c.nombre || ' ' || c.apellidop AS "fullName", c.foto_perfil AS "profilePic"
+        FROM conversacion conv
+        JOIN clientes c ON conv.id_cliente = c.id_cliente
+        WHERE conv.id_geriatra = $1
+      `;
+    } else {
+      query = `
+        SELECT g.id_geriatra AS id, g.nombre || ' ' || g.apellidop AS "fullName", g.foto_perfil AS "profilePic"
+        FROM conversacion conv
+        JOIN geriatras g ON conv.id_geriatra = g.id_geriatra
+        WHERE conv.id_cliente = $1
+      `;
+    }
+
+    const { rows } = await pool.query(query, [userId]);
+    res.json(rows);
+  } catch (error) {
+    console.error("Error al obtener conversaciones:", error);
+    res.status(500).json({ error: "Error interno del servidor" });
+  }
+};
+
+// 2. Obtener contactos disponibles para iniciar un chat nuevo
 export const getContacts = async (req, res) => {
   const userRole = req.user.rol;
+  const userId = req.user.id; // <-- Ahora sacamos el ID del usuario que hace la petición
+
   try {
     let query;
+    let queryParams = [];
+
     if (userRole === "geriatra" || userRole === "administrador") {
-      query = `SELECT id_cliente AS id, CONCAT(nombre, ' ', apellidop) AS "fullName", rol, foto_perfil AS "profilePic" FROM clientes`;
+      // El geriatra SOLO ve a los clientes donde él sea el doctor asignado
+      query = `
+        SELECT id_cliente AS id, nombre || ' ' || apellidop AS "fullName", rol, foto_perfil AS "profilePic" 
+        FROM clientes 
+        WHERE id_geriatra = $1
+      `;
+      queryParams = [userId];
     } else {
-      query = `SELECT id_geriatra AS id, CONCAT(nombre, ' ', apellidop) AS "fullName", rol, foto_perfil AS "profilePic" FROM geriatras`;
+      // El cliente (paciente/cuidador) SOLO ve a su geriatra asignado
+      query = `
+        SELECT g.id_geriatra AS id, g.nombre || ' ' || g.apellidop AS "fullName", g.rol, g.foto_perfil AS "profilePic" 
+        FROM geriatras g
+        JOIN clientes c ON g.id_geriatra = c.id_geriatra
+        WHERE c.id_cliente = $1
+      `;
+      queryParams = [userId];
     }
-    const { rows } = await pool.query(query);
+
+    const { rows } = await pool.query(query, queryParams);
     res.status(200).json(rows);
   } catch (error) {
+    console.error("Error en getContacts:", error);
     res.status(500).json({ message: "Error al obtener contactos" });
   }
 };
 
-// Obtener conversaciones activas del usuario
-export const getMyConversations = async (req, res) => {
-  const userId = req.user.id;
-  const userRole = req.user.rol;
-
-  try {
-    let query;
-    if (userRole === "geriatra" || userRole === "administrador") {
-      // Geriatra ve a sus clientes con conversación activa
-      query = `
-        SELECT 
-          c.id_conversacion,
-          cl.id_cliente AS id,
-          CONCAT(cl.nombre, ' ', cl.apellidop) AS "fullName",
-          cl.foto_perfil AS "profilePic",
-          cl.rol
-        FROM conversacion c
-        JOIN clientes cl ON c.id_cliente = cl.id_cliente
-        WHERE c.id_geriatra = $1
-        ORDER BY c.fecha_creacion DESC
-      `;
-    } else {
-      // Cliente ve a sus geriatras con conversación activa
-      query = `
-        SELECT 
-          c.id_conversacion,
-          g.id_geriatra AS id,
-          CONCAT(g.nombre, ' ', g.apellidop) AS "fullName",
-          g.foto_perfil AS "profilePic",
-          g.rol
-        FROM conversacion c
-        JOIN geriatras g ON c.id_geriatra = g.id_geriatra
-        WHERE c.id_cliente = $1
-        ORDER BY c.fecha_creacion DESC
-      `;
-    }
-    const { rows } = await pool.query(query, [userId]);
-    res.status(200).json(rows);
-  } catch (error) {
-    res.status(500).json({ message: "Error al obtener conversaciones" });
-  }
-};
-
-// Obtener mensajes: busca la conversación por los dos participantes
+// 3. Obtener mensajes (Ahora usa targetId en lugar de id_conversacion)
 export const getMessages = async (req, res) => {
-  const { targetId } = req.params;
+ const targetId = req.params.id || req.params.targetId || req.params.id_conversacion;
+
+  // Si llega vacío o dice "undefined", avisamos en la consola para no fallar en silencio
+  if (!targetId || targetId === "undefined") {
+    console.log("Error: El backend no recibió el ID del contacto.");
+    return res.status(400).json([]);
+  }
   const myId = req.user.id;
   const myRole = req.user.rol;
 
   try {
-    let convQuery;
-    if (myRole === "geriatra" || myRole === "administrador") {
-      convQuery = `SELECT id_conversacion FROM conversacion WHERE id_geriatra = $1 AND id_cliente = $2`;
-    } else {
-      convQuery = `SELECT id_conversacion FROM conversacion WHERE id_cliente = $1 AND id_geriatra = $2`;
-    }
+    // Averiguamos quién es el cliente y quién el geriatra
+    const idCliente = (myRole === 'geriatra' || myRole === 'administrador') ? targetId : myId;
+    const idGeriatra = (myRole === 'geriatra' || myRole === 'administrador') ? myId : targetId;
 
-    const convResult = await pool.query(convQuery, [myId, targetId]);
-    if (convResult.rows.length === 0) {
-      return res.status(200).json([]); // Sin conversación aún, devuelve vacío
-    }
-
-    const id_conversacion = convResult.rows[0].id_conversacion;
-
-    const { rows } = await pool.query(
-      `SELECT id_mensaje, contenido_texto, fecha_envio, id_remitente, tipo_remitente
-       FROM mensajes WHERE id_conversacion = $1 ORDER BY fecha_envio ASC`,
-      [id_conversacion]
+    // Buscamos si existe la conversación entre ambos
+    const conv = await pool.query(
+      "SELECT id_conversacion FROM conversacion WHERE id_cliente = $1 AND id_geriatra = $2",
+      [idCliente, idGeriatra]
     );
+
+    // Si nunca han hablado, devolvemos un arreglo vacío (sin error)
+    if (conv.rows.length === 0) {
+      return res.status(200).json([]);
+    }
+
+    const idConversacion = conv.rows[0].id_conversacion;
+
+    const query = `
+      SELECT id_mensaje, contenido_texto, fecha_envio, id_remitente, tipo_remitente 
+      FROM mensajes 
+      WHERE id_conversacion = $1 
+      ORDER BY fecha_envio ASC
+    `;
+    const { rows } = await pool.query(query, [idConversacion]);
+    
     res.status(200).json(rows);
   } catch (error) {
+    console.error("Error en getMessages:", error);
     res.status(500).json({ message: "Error al recuperar mensajes" });
   }
 };
 
-// Enviar mensaje: busca o crea la conversación automáticamente
+// 4. Enviar un mensaje (Crea la conversación automáticamente si no existe)
 export const sendMessage = async (req, res) => {
-  const { targetId, contenido_texto } = req.body;
-  const senderId = req.user.id;
+  const { targetId, contenido_texto } = req.body; // Ahora recibimos targetId del body
+  const senderId = req.user.id; 
   const senderRole = req.user.rol;
 
   try {
-    const tipoRemitente = (senderRole === "geriatra" || senderRole === "administrador") ? "geriatra" : "cliente";
+    const tipoRemitente = (senderRole === 'geriatra' || senderRole === 'administrador') 
+                          ? 'geriatra' : 'cliente';
 
-    const clienteId  = tipoRemitente === "geriatra" ? targetId  : senderId;
-    const geriatraId = tipoRemitente === "geriatra" ? senderId  : targetId;
+    const idCliente = tipoRemitente === 'geriatra' ? targetId : senderId;
+    const idGeriatra = tipoRemitente === 'geriatra' ? senderId : targetId;
 
-    // Buscar conversación existente
-    let convResult = await pool.query(
-      `SELECT id_conversacion FROM conversacion WHERE id_cliente = $1 AND id_geriatra = $2`,
-      [clienteId, geriatraId]
+    // 1. Buscamos la conversación
+    let conv = await pool.query(
+      "SELECT id_conversacion FROM conversacion WHERE id_cliente = $1 AND id_geriatra = $2",
+      [idCliente, idGeriatra]
     );
 
-    // Crear si no existe
-    if (convResult.rows.length === 0) {
-      convResult = await pool.query(
-        `INSERT INTO conversacion (id_cliente, id_geriatra) VALUES ($1, $2) RETURNING id_conversacion`,
-        [clienteId, geriatraId]
+    let idConversacion;
+
+    // 2. Si no existe, la CREAMOS (¡Así ya no tienes que hacer INSERTs manuales!)
+    if (conv.rows.length === 0) {
+      const newConv = await pool.query(
+        "INSERT INTO conversacion (id_cliente, id_geriatra) VALUES ($1, $2) RETURNING id_conversacion",
+        [idCliente, idGeriatra]
       );
+      idConversacion = newConv.rows[0].id_conversacion;
+    } else {
+      idConversacion = conv.rows[0].id_conversacion;
     }
 
-    const id_conversacion = convResult.rows[0].id_conversacion;
-
-    const { rows } = await pool.query(
-      `INSERT INTO mensajes (id_conversacion, id_remitente, tipo_remitente, contenido_texto)
-       VALUES ($1, $2, $3, $4) RETURNING *`,
-      [id_conversacion, senderId, tipoRemitente, contenido_texto]
-    );
+    // 3. Insertamos el mensaje
+    const query = `
+      INSERT INTO mensajes (id_conversacion, id_remitente, tipo_remitente, contenido_texto)
+      VALUES ($1, $2, $3, $4)
+      RETURNING *;
+    `;
+    const { rows } = await pool.query(query, [idConversacion, senderId, tipoRemitente, contenido_texto]);
     const newMessage = rows[0];
 
-    // Socket en tiempo real
-    const receiverId = tipoRemitente === "geriatra" ? clienteId : geriatraId;
+    // 4. Lógica de Socket.io
     const receiverRole = tipoRemitente === "geriatra" ? "cliente" : "geriatra";
-    const receiverSocketId = getReceiverSocketId(receiverId.toString(), receiverRole);
+    const receiverSocketId = getReceiverSocketId(targetId.toString(), receiverRole);
+    
     if (receiverSocketId) {
       io.to(receiverSocketId).emit("newMessage", newMessage);
     }
 
     res.status(201).json(newMessage);
   } catch (error) {
-    console.error("Error al enviar mensaje:", error);
+    console.error("Error en sendMessage:", error);
     res.status(500).json({ message: "Error al enviar mensaje" });
   }
 };

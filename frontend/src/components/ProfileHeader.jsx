@@ -22,7 +22,7 @@ function ProfileHeader() {
     reader.onloadend = async () => {
       const base64Image = reader.result;
       setSelectedImg(base64Image);
-      await updateProfile({ profilePic: base64Image });
+      await updateProfile({ foto_perfil: base64Image });
     };
   };
 
@@ -36,9 +36,7 @@ function ProfileHeader() {
               className="size-14 rounded-full overflow-hidden relative group"
               onClick={() => fileInputRef.current.click()}
             >
-              <img
-                src={selectedImg || authUser.foto_perfil || "/avatar.png"}
-                alt="User image"
+              <img src={selectedImg || authUser?.foto_perfil || "/avatar.png"} alt="User image"
                 className="size-full object-cover"
               />
               <div className="absolute inset-0 bg-black/50 opacity-0 group-hover:opacity-100 flex items-center justify-center transition-opacity">
@@ -57,9 +55,9 @@ function ProfileHeader() {
 
           {/* USERNAME & ONLINE TEXT */}
           <div>
-            <h3 className="text-slate-200 font-medium text-base max-w-[180px] truncate">
-              {authUser.nombre}
-            </h3>
+           <h3 className="text-slate-200 font-medium text-base max-w-[180px] truncate">
+  {authUser?.nombre}
+</h3>
 
             <p className="text-slate-400 text-xs">Online</p>
           </div>

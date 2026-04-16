@@ -67,7 +67,7 @@ export const useChatStore = create((set, get) => ({
 
     const optimisticMessage = {
       id_mensaje: Date.now(),
-      id_remitente: authUser.id,
+      id_remitente: authUser?.id || authUser?.id_geriatra || authUser?.id_cliente,
       // ✅ Corregido: campo correcto
       contenido_texto: messageData.contenido_texto,
       fecha_envio: new Date().toISOString(),
@@ -94,6 +94,8 @@ export const useChatStore = create((set, get) => ({
     if (!selectedUser) return;
 
     const socket = useAuthStore.getState().socket;
+
+    if (!socket) return;
 
     socket.on("newMessage", (newMessage) => {
       // ✅ Corregido: comparamos con selectedUser.id (ya normalizado)

@@ -4,7 +4,7 @@ import toast from "react-hot-toast";
 import { io } from "socket.io-client";
 
 // URL fija sin condicionales de desarrollo
-const BASE_URL = "http://localhost:3000"; 
+const BASE_URL = "http://localhost:4000"; 
 
 export const useAuthStore = create((set, get) => ({
   authUser: null,
@@ -16,9 +16,16 @@ export const useAuthStore = create((set, get) => ({
 
   checkAuth: async () => {
     try {
-      const res = await axiosInstance.get("/auth/check");
-      set({ authUser: res.data });
-      get().connectSocket();
+      // Leemos el usuario directamente de tu sistema actual
+      const usuarioGuardado = localStorage.getItem('usuario');
+      
+      if (usuarioGuardado && usuarioGuardado !== "undefined") {
+        set({ authUser: JSON.parse(usuarioGuardado) });
+        // Si hay usuario, conectamos los Sockets en tiempo real
+        get().connectSocket(); 
+      } else {
+        set({ authUser: null });
+      }
     } catch (error) {
       console.log("Error en authCheck:", error);
       set({ authUser: null });
@@ -26,7 +33,7 @@ export const useAuthStore = create((set, get) => ({
       set({ isCheckingAuth: false });
     }
   },
-
+  
   signup: async (data) => {
     set({ isSigningUp: true });
     try {

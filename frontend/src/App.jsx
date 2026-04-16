@@ -1,38 +1,107 @@
-import { Navigate, Route, Routes } from "react-router";
-import ChatPage from "./pages/ChatPage";
-import LoginPage from "./pages/LoginPage";
-import SignUpPage from "./pages/SignUpPage";
+import React, { useState, useEffect } from 'react';
+import { BrowserRouter as Router, Routes, Route, Navigate, useNavigate } from 'react-router-dom';
+import { AnimatePresence } from 'framer-motion';
+import Login from './pages/Login';
+import AdminDashboard from './pages/AdminDashboard';
+import GeriatraDashboard from './pages/GeriatraDashboard';
+import DashboardReportes from "./pages/DashboardReportes";
+import PageTransition from './pages/PageTransition';
+import VideoLoader from './pages/VideoLoader';
 import { useAuthStore } from "./store/useAuthStore";
-import { useEffect } from "react";
-import PageLoader from "./components/PageLoader";
+// ------------------------------------------------------------------
+// COMPONENTE DE SEGURIDAD: Valida el token y el rol antes de renderizar
+// ------------------------------------------------------------------
+const getUsuarioSeguro = () => {
 
-import { Toaster } from "react-hot-toast";
+  
 
-function App() {
-  const { checkAuth, isCheckingAuth, authUser } = useAuthStore();
+  const usuario = localStorage.getItem('usuario');
+  // Verifica que exista y que no sea la palabra "undefined"
+  if (usuario && usuario !== "undefined") {
+    return JSON.parse(usuario);
+  }
+  return null;
+};
 
+const ProtectedRoute = ({ children, allowedRole }) => {
+  // Usamos la función segura que creamos en el paso anterior
+  const usuario = getUsuarioSeguro(); 
+
+  // Si no hay usuario guardado, o el rol no es el correcto, lo regresamos al login
+  if (!usuario || usuario.rol !== allowedRole) {
+    return <Navigate to="/login" replace />;
+  }
+
+  // Si todo está bien, le abrimos la puerta al Dashboard
+  return children;
+};
+
+// ------------------------------------------------------------------
+// COMPONENTE PRINCIPAL (RUTAS)
+// ------------------------------------------------------------------
+function AppRoutes() {
+  // 3. Creamos un estado maestro para controlar el video
+  const [isAppLoading, setIsAppLoading] = useState(true);
+  const { authUser } = useAuthStore();
+
+  // 4. Simulamos un tiempo de carga de 2.5 segundos (2500 ms)
   useEffect(() => {
-    checkAuth();
-  }, [checkAuth]);
+    const timer = setTimeout(() => {
+      setIsAppLoading(false);
+    }, 3500); // <-- Cambia este número para que el video dure más o menos
+    return () => clearTimeout(timer);
+  }, []);
 
-  if (isCheckingAuth) return <PageLoader />;
+  const handleLogout = () => {
+    localStorage.removeItem('token');
+    localStorage.removeItem('usuario');
+    window.location.href = '/login'; 
+  };
+
+  
 
   return (
-    <div className="min-h-screen bg-slate-900 relative flex items-center justify-center p-4 overflow-hidden">
-      {/* DECORATORS - GRID BG & GLOW SHAPES */}
-      <div className="absolute inset-0 bg-[linear-gradient(to_right,#4f4f4f2e_1px,transparent_1px),linear-gradient(to_bottom,#4f4f4f2e_1px,transparent_1px)] bg-[size:14px_24px]" />
-      <div className="absolute top-0 -left-4 size-96 bg-pink-500 opacity-20 blur-[100px]" />
-      <div className="absolute bottom-0 -right-4 size-96 bg-cyan-500 opacity-20 blur-[100px]" />
+    <>
+      {/* 5. AnimatePresence permite hacer transiciones al "desmontar" componentes */}
+      <AnimatePresence>
+        {isAppLoading && <VideoLoader key="loader" />}
+      </AnimatePresence>
 
-      <Routes>
-        <Route path="/" element={authUser ? <ChatPage /> : <Navigate to={"/login"} />} />
-        <Route path="/login" element={!authUser ? <LoginPage /> : <Navigate to={"/"} />} />
-        <Route path="/signup" element={!authUser ? <SignUpPage /> : <Navigate to={"/"} />} />
-      </Routes>
+      {/* Si la app sigue "cargando", ocultamos todo lo demás temporalmente */}
+      {!isAppLoading && (
+        <Router>
+          <Routes>
+            <Route path="/login" element={
+              <PageTransition><Login /></PageTransition>
+            } />
 
-      <Toaster />
-    </div>
+            <Route path="/admin" element={
+              <ProtectedRoute allowedRole="administrador">
+                <PageTransition>
+<AdminDashboard user={getUsuarioSeguro()} onLogout={handleLogout} />                </PageTransition>
+              </ProtectedRoute>
+            } />
+
+            <Route path="/medico" element={
+              <ProtectedRoute allowedRole="geriatra">
+                <PageTransition>
+                  <GeriatraDashboard user={getUsuarioSeguro()} onLogout={handleLogout} />
+                </PageTransition>
+              </ProtectedRoute>
+            } />
+
+            <Route path="*" element={<Navigate to="/login" replace />} />
+
+            <Route 
+        path="/reportes" 
+        element={authUser?.rol === 'geriatra' || authUser?.rol === 'administrador' ? <DashboardReportes /> : <Navigate to="/login" />} 
+      />
+          </Routes>
+        </Router>
+      )}
+    </>
   );
 }
-export default App;
+
+export default AppRoutes;
 
