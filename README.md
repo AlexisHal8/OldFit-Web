@@ -16,8 +16,7 @@ npm install react-hot-toast lucide-react
 npm i zustand
 npm install socket.io-client
 npm i cors
-npm install -D tailwindcss@3 postcss autoprefixer
->> npx tailwindcss init -p
+npm install -D tailwindcss@3 postcss autoprefixer npx tailwindcss init -p
 
 
 #Como correrlo
