@@ -1,51 +1,42 @@
 import { useState, useRef } from "react";
-import { LogOutIcon, VolumeOffIcon, Volume2Icon } from "lucide-react";
+import { LogOutIcon } from "lucide-react";
 import { useAuthStore } from "../store/useAuthStore";
-import { useChatStore } from "../store/useChatStore";
-
-const mouseClickSound = new Audio("/sounds/mouse-click.mp3");
 
 function ProfileHeader() {
   const { logout, authUser, updateProfile } = useAuthStore();
-  const { isSoundEnabled, toggleSound } = useChatStore();
   const [selectedImg, setSelectedImg] = useState(null);
-
   const fileInputRef = useRef(null);
 
   const handleImageUpload = async (e) => {
-  const file = e.target.files[0];
-  if (!file) return;
-
-  const reader = new FileReader();
-  reader.readAsDataURL(file);
-
-  reader.onload = async () => {
-    const base64Image = reader.result;
-    
-    // El 'data' que recibe updateProfile DEBE ser un objeto
-    // con la clave 'profilePic', que es la que busca tu controlador
-    await updateProfile({ profilePic: base64Image }); 
+    const file = e.target.files[0];
+    if (!file) return;
+    const reader = new FileReader();
+    reader.readAsDataURL(file);
+    reader.onload = async () => {
+      const base64Image = reader.result;
+      await updateProfile({ profilePic: base64Image });
+    };
   };
-};
 
   return (
-    <div className="p-6 border-b border-slate-700/50">
+    <div className="p-4 border-b border-gray-200 bg-white">
       <div className="flex items-center justify-between">
         <div className="flex items-center gap-3">
-          {/* AVATAR */}
-          <div className="avatar online">
+          <div className="relative">
             <button
-              className="size-14 rounded-full overflow-hidden relative group"
+              className="w-11 h-11 rounded-full overflow-hidden ring-2 ring-emerald-200 group"
               onClick={() => fileInputRef.current.click()}
             >
-              <img src={selectedImg || authUser?.foto_perfil || "/avatar.png"} alt="User image"
-                className="size-full object-cover"
+              <img
+                src={selectedImg || authUser?.foto_perfil || "/avatar.png"}
+                alt="Avatar"
+                className="w-full h-full object-cover"
               />
-              <div className="absolute inset-0 bg-black/50 opacity-0 group-hover:opacity-100 flex items-center justify-center transition-opacity">
-                <span className="text-white text-xs">Change</span>
+              <div className="absolute inset-0 bg-black/40 opacity-0 group-hover:opacity-100 flex items-center justify-center transition-opacity rounded-full">
+                <span className="text-white text-[10px] font-semibold">Cambiar</span>
               </div>
             </button>
-
+            <span className="absolute bottom-0 right-0 w-3 h-3 bg-emerald-500 border-2 border-white rounded-full" />
             <input
               type="file"
               accept="image/*"
@@ -54,44 +45,15 @@ function ProfileHeader() {
               className="hidden"
             />
           </div>
-
-          {/* USERNAME & ONLINE TEXT */}
           <div>
-           <h3 className="text-slate-200 font-medium text-base max-w-[180px] truncate">
-  {authUser?.nombre}
-</h3>
-
-            <p className="text-slate-400 text-xs">Online</p>
+            <h3 className="text-gray-800 font-semibold text-sm truncate max-w-[160px]">
+              Dr(a). {authUser?.nombre}
+            </h3>
+            <p className="text-emerald-600 text-xs font-medium">En línea</p>
           </div>
         </div>
 
-        {/* BUTTONS */}
-        <div className="flex gap-4 items-center">
-          {/* LOGOUT BTN */}
-          <button
-            className="text-slate-400 hover:text-slate-200 transition-colors"
-            onClick={logout}
-          >
-            <LogOutIcon className="size-5" />
-          </button>
-
-          {/* SOUND TOGGLE BTN */}
-          <button
-            className="text-slate-400 hover:text-slate-200 transition-colors"
-            onClick={() => {
-              // play click sound before toggling
-              mouseClickSound.currentTime = 0; // reset to start
-              mouseClickSound.play().catch((error) => console.log("Audio play failed:", error));
-              toggleSound();
-            }}
-          >
-            {isSoundEnabled ? (
-              <Volume2Icon className="size-5" />
-            ) : (
-              <VolumeOffIcon className="size-5" />
-            )}
-          </button>
-        </div>
+        
       </div>
     </div>
   );

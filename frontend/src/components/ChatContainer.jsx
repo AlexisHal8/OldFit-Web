@@ -21,8 +21,6 @@ function ChatContainer() {
   useEffect(() => {
     getMessagesByUserId(selectedUser.id);
     subscribeToMessages();
-
-    // clean up
     return () => unsubscribeFromMessages();
   }, [selectedUser, getMessagesByUserId, subscribeToMessages, unsubscribeFromMessages]);
 
@@ -35,38 +33,25 @@ function ChatContainer() {
   return (
     <>
       <ChatHeader />
-      <div className="flex-1 px-6 overflow-y-auto py-8">
+      <div className="flex-1 px-5 overflow-y-auto py-5 bg-gray-50">
         {messages.length > 0 && !isMessagesLoading ? (
-       <div className="max-w-3xl mx-auto space-y-4 px-4">
+          <div className="max-w-2xl mx-auto space-y-3">
             {messages.map((msg) => {
-              // Comparamos si el mensaje es nuestro
               const isMe = msg.id_remitente === authUser?.id;
-
               return (
-                <div
-                  key={msg.id_mensaje}
-                  // 1. EL SECRETO ESTÁ AQUÍ: justify-end lo manda a la derecha, justify-start a la izquierda
-                  className={`flex w-full ${isMe ? "justify-end" : "justify-start"}`}
-                >
-                  <div
-                    // 2. Bordes redondeados con la esquina plana dependiendo de quién lo envía
-                    className={`w-fit max-w-[80%] flex flex-col px-4 py-2 rounded-2xl ${
-                      isMe
-                        ? "bg-cyan-600 text-white rounded-tr-none" // Piquito arriba a la derecha
-                        : "bg-slate-800 text-slate-200 rounded-tl-none" // Piquito arriba a la izquierda
-                    }`}
-                  >
+                <div key={msg.id_mensaje} className={`flex w-full ${isMe ? "justify-end" : "justify-start"}`}>
+                  <div className={`w-fit max-w-[75%] flex flex-col px-4 py-2.5 rounded-2xl shadow-sm ${
+                    isMe
+                      ? "bg-emerald-600 text-white rounded-tr-sm"
+                      : "bg-white text-gray-800 rounded-tl-sm border border-gray-100"
+                  }`}>
                     {msg.image && (
-                      <img src={msg.image} alt="Shared" className="rounded-lg max-h-48 object-cover mb-2" />
+                      <img src={msg.image} alt="Imagen" className="rounded-lg max-h-48 object-cover mb-2" />
                     )}
-                    
-                    {/* TEXTO DEL MENSAJE */}
                     {msg.contenido_texto && (
-                      <p className="text-sm">{msg.contenido_texto}</p>
+                      <p className="text-sm leading-relaxed">{msg.contenido_texto}</p>
                     )}
-                    
-                    {/* HORA DEL MENSAJE */}
-                    <span className={`text-[10px] mt-1 text-right ${isMe ? "text-cyan-100" : "text-slate-400"}`}>
+                    <span className={`text-[10px] mt-1 text-right ${isMe ? "text-emerald-100" : "text-gray-400"}`}>
                       {new Date(msg.fecha_envio || msg.createdAt).toLocaleTimeString(undefined, {
                         hour: "2-digit",
                         minute: "2-digit",
@@ -84,10 +69,8 @@ function ChatContainer() {
           <NoChatHistoryPlaceholder name={selectedUser.fullName} />
         )}
       </div>
-
       <MessageInput />
     </>
   );
 }
-
 export default ChatContainer;
