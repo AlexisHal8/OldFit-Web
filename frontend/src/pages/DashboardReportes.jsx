@@ -63,29 +63,52 @@ export default function DashboardReportes() {
     fetchData();
   }, [selectedPatient]);
 
+  const guardarReporteEnBD = async (urlCloudinary, pacienteId, geriatraId) => {
+  try {
+    await axiosInstance.post("/movil/reportes/guardar", {
+      id_cliente:  pacienteId,
+      id_geriatra: geriatraId,
+      titulo:      "Reporte Mensual de Evolución",
+      url_pdf:     urlCloudinary,
+    });
+    toast.success("¡Reporte guardado en el expediente!");
+  } catch (error) {
+    console.error("Error:", error);
+    toast.error("El PDF se generó, pero no se guardó en el historial.");
+  }
+};
+
   const handleGeneratePDF = async () => {
-    if (!selectedPatient) return;
-    setIsGeneratingPDF(true);
-    try {
-      const res = await axiosInstance.post("/evaluations", {
-        patientId: selectedPatient.id,
-        type: "Reporte Integral",
-        results: {
-          sesiones_cognitivas:  patientData?.evaluaciones_cognitivas?.length  ?? 0,
-          evaluaciones_fisicas: patientData?.evaluaciones_fisicas?.length     ?? 0,
-          medicamentos_activos: patientData?.medicamentos_activos?.length     ?? 0,
-        },
-      });
-      if (res.data.pdf_url) {
-        window.open(res.data.pdf_url, "_blank");
-        toast.success("Reporte generado exitosamente.");
-      }
-    } catch {
-      toast.error("Error al generar el reporte PDF.");
-    } finally {
-      setIsGeneratingPDF(false);
+  if (!selectedPatient) return;
+  setIsGeneratingPDF(true);
+  try {
+    const res = await axiosInstance.post("/evaluations", {
+      patientId: selectedPatient.id,
+      type: "Reporte Integral",
+      results: {
+        sesiones_cognitivas:  patientData?.evaluaciones_cognitivas?.length  ?? 0,
+        evaluaciones_fisicas: patientData?.evaluaciones_fisicas?.length     ?? 0,
+        medicamentos_activos: patientData?.medicamentos_activos?.length     ?? 0,
+      },
+    });
+
+    if (res.data.pdf_url) {
+      window.open(res.data.pdf_url, "_blank");
+
+      // ← LÍNEA NUEVA: guarda el registro en BD después de abrir el PDF
+      await guardarReporteEnBD(
+        res.data.pdf_url,       // URL de Cloudinary
+        selectedPatient.id,     // id_cliente
+        res.data.id_geriatra    // id_geriatra que devuelve el backend
+                                // (si no lo devuelve, usa authUser.id desde useAuthStore)
+      );
     }
-  };
+  } catch {
+    toast.error("Error al generar el reporte PDF.");
+  } finally {
+    setIsGeneratingPDF(false);
+  }
+};
 
   const getCognitivoByGame = () => {
     if (!patientData?.evaluaciones_cognitivas) return {};
@@ -96,6 +119,8 @@ export default function DashboardReportes() {
       return acc;
     }, {});
   };
+
+  
 
   const filteredPatients = patients.filter(p =>
     p.fullName.toLowerCase().includes(search.toLowerCase())
