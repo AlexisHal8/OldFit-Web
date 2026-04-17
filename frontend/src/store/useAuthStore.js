@@ -4,7 +4,7 @@ import toast from "react-hot-toast";
 import { io } from "socket.io-client";
 
 // URL fija sin condicionales de desarrollo
-const BASE_URL = "http://localhost:4000"; 
+const BASE_URL = "https://backendoldfit-production.up.railway.app"; 
 
 export const useAuthStore = create((set, get) => ({
   authUser: null,

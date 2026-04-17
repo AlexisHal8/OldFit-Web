@@ -9,14 +9,14 @@ const AdministrarMedicos = () => {
   useEffect(() => { cargarMedicos(); }, []);
 
   const cargarMedicos = async () => {
-    const res = await fetch('http://localhost:4000/api/admin/geriatras');
+    const res = await fetch('https://backendoldfit-production.up.railway.app/api/admin/geriatras');
     const data = await res.json();
     setMedicos(data);
   };
 
   const handleSubmit = async (e) => {
     e.preventDefault();
-    const url = editando ? `http://localhost:4000/api/admin/geriatras/${editando}` : 'http://localhost:4000/api/admin/geriatras';
+    const url = editando ? `https://backendoldfit-production.up.railway.app/api/admin/geriatras/${editando}` : 'https://backendoldfit-production.up.railway.app/api/admin/geriatras';
     const method = editando ? 'PUT' : 'POST';
 
     const res = await fetch(url, {

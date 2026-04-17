@@ -18,7 +18,7 @@ const GeriatraDashboard = ({ user, onLogout }) => {
     checkAuth();
     const fetchResumen = async () => {
       try {
-        const response = await fetch(`http://localhost:4000/api/geriatra/${user.id}/resumen`);
+        const response = await fetch(`https://backendoldfit-production.up.railway.app/api/geriatra/${user.id}/resumen`);
         if (response.ok) {
           const data = await response.json();
           setResumen(data);

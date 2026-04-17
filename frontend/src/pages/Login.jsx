@@ -10,7 +10,7 @@ const Login = () => {
   e.preventDefault();
   
   try {
-    const response = await fetch('http://localhost:4000/api/auth/login', {
+    const response = await fetch('https://backendoldfit-production.up.railway.app/api/auth/login', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       credentials: 'include', // Vital para que funcione la seguridad del nuevo backend

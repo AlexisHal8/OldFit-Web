@@ -21,13 +21,13 @@ const GestionarCitas = ({ user }) => {
   }, [user.id]);
 
   const cargarPacientes = async () => {
-    const res = await fetch(`http://localhost:4000/api/geriatra/${user.id}/pacientes`);
+    const res = await fetch(`https://backendoldfit-production.up.railway.app/api/geriatra/${user.id}/pacientes`);
     const data = await res.json();
     setPacientes(data);
   };
 
   const cargarCitas = async () => {
-    const res = await fetch(`http://localhost:4000/api/geriatra/${user.id}/citas`);
+    const res = await fetch(`https://backendoldfit-production.up.railway.app/api/geriatra/${user.id}/citas`);
     const data = await res.json();
     setCitas(data);
   };
@@ -35,7 +35,7 @@ const GestionarCitas = ({ user }) => {
   const handleAgendar = async (e) => {
     e.preventDefault();
     try {
-      const response = await fetch('http://localhost:4000/api/citas', {
+      const response = await fetch('https://backendoldfit-production.up.railway.app/api/citas', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ ...form, id_geriatra: user.id })
@@ -54,7 +54,7 @@ const GestionarCitas = ({ user }) => {
 
   const handleCancelar = async (id_cita) => {
     if (window.confirm("¿Estás seguro de que deseas cancelar esta cita? Esta acción no se puede deshacer.")) {
-      await fetch(`http://localhost:4000/api/citas/${id_cita}`, { method: 'DELETE' });
+      await fetch(`https://backendoldfit-production.up.railway.app/api/citas/${id_cita}`, { method: 'DELETE' });
       // Filtramos la cita eliminada de la vista sin recargar la base de datos
       setCitas(citas.filter(cita => cita.id_cita !== id_cita));
     }

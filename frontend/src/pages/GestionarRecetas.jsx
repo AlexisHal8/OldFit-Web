@@ -22,7 +22,7 @@ const GestionarRecetas = ({ user }) => {
   // Cargar lista de pacientes
   useEffect(() => {
     if (user?.id) {
-      fetch(`http://localhost:4000/api/geriatra/${user.id}/pacientes`)
+      fetch(`https://backendoldfit-production.up.railway.app/api/geriatra/${user.id}/pacientes`)
         .then(res => res.json())
         .then(data => setPacientes(data))
         .catch(err => console.error(err));
@@ -32,7 +32,7 @@ const GestionarRecetas = ({ user }) => {
   // Cargar recetas del paciente
   const cargarRecetas = () => {
     if (pacienteSeleccionado) {
-      fetch(`http://localhost:4000/api/recetas/paciente/${pacienteSeleccionado}`)
+      fetch(`https://backendoldfit-production.up.railway.app/api/recetas/paciente/${pacienteSeleccionado}`)
         .then(res => res.json())
         .then(data => setRecetas(data))
         .catch(err => console.error(err));
@@ -53,7 +53,7 @@ const GestionarRecetas = ({ user }) => {
     // 1. LÓGICA DE MODIFICACIÓN
     if (modoEdicion) {
         try {
-            const response = await fetch(`http://localhost:4000/api/recetas/${idRecetaEditando}`, {
+            const response = await fetch(`https://backendoldfit-production.up.railway.app/api/recetas/${idRecetaEditando}`, {
               method: 'PUT',
               headers: { 'Content-Type': 'application/json' },
               body: JSON.stringify(form)
@@ -71,7 +71,7 @@ const GestionarRecetas = ({ user }) => {
     // 2. LÓGICA DE CREACIÓN
     else {
         try {
-            const response = await fetch('http://localhost:4000/api/recetas', {
+            const response = await fetch('https://backendoldfit-production.up.railway.app/api/recetas', {
               method: 'POST',
               headers: { 'Content-Type': 'application/json' },
               body: JSON.stringify({ ...form, id_paciente: pacienteSeleccionado, id_geriatra: user.id })
@@ -112,7 +112,7 @@ const GestionarRecetas = ({ user }) => {
   // Eliminar
   const handleDelete = async (id) => {
     if (window.confirm("¿Eliminar esta receta de forma permanente?")) {
-      await fetch(`http://localhost:4000/api/recetas/${id}`, { method: 'DELETE' });
+      await fetch(`https://backendoldfit-production.up.railway.app/api/recetas/${id}`, { method: 'DELETE' });
       cargarRecetas();
       // Si eliminamos la receta que estábamos editando, salimos del modo edición
       if (idRecetaEditando === id) cancelarEdicion(); 
